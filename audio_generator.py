@@ -6,12 +6,14 @@ import subprocess
 
 
 class AudioGenerator:
+    """Generate and manage audio for video scenes"""
     
     def __init__(self, output_dir: Path):
         self.output_dir = output_dir / 'audio'
         self.output_dir.mkdir(parents=True, exist_ok=True)
     
     def generate_cafe_noise(self, duration: float) -> str:
+        """Generate cafe ambient noise"""
         output_path = self.output_dir / 'cafe_noise.mp3'
         
         cmd = [
@@ -23,11 +25,12 @@ class AudioGenerator:
         ]
         
         print(f"Generating cafe noise: {duration}s")
-        subprocess.run(cmd, capture_output=True, shell=True)
+        subprocess.run(cmd, capture_output=True, shell=False)
         
         return str(output_path)
     
     def generate_calm_music(self, duration: float) -> str:
+        """Generate calm background music"""
         output_path = self.output_dir / 'calm_music.mp3'
         
         cmd = [
@@ -44,11 +47,12 @@ class AudioGenerator:
         ]
         
         print(f"Generating calm music: {duration}s")
-        subprocess.run(cmd, capture_output=True, shell=True)
+        subprocess.run(cmd, capture_output=True, shell=False)
         
         return str(output_path)
     
     def generate_product_music(self, duration: float) -> str:
+        """Generate upbeat product music"""
         output_path = self.output_dir / 'product_music.mp3'
         
         cmd = [
@@ -63,11 +67,12 @@ class AudioGenerator:
         ]
         
         print(f"Generating product music: {duration}s")
-        subprocess.run(cmd, capture_output=True, shell=True)
+        subprocess.run(cmd, capture_output=True, shell=False)
         
         return str(output_path)
     
     def create_audio_timeline(self, scene_durations: List[Dict]) -> str:
+        """Create complete audio timeline for all scenes"""
         print("\nCreating audio timeline...")
         print("-" * 60)
         
@@ -104,17 +109,18 @@ class AudioGenerator:
         return final_audio
     
     def _merge_audio_segments(self, segments: List[Dict]) -> str:
+        """Merge multiple audio segments into one file"""
         output_path = self.output_dir / 'final_audio.mp3'
         
         if len(segments) == 1:
             return segments[0]['path']
         
-        filter_parts = []
+        # Build input list
         inputs = []
-        
-        for i, seg in enumerate(segments):
+        for seg in segments:
             inputs.extend(['-i', seg['path']])
         
+        # Build filter complex for concatenation
         filter_complex = f"concat=n={len(segments)}:v=0:a=1[out]"
         
         cmd = ['ffmpeg', '-y'] + inputs + [
@@ -123,20 +129,52 @@ class AudioGenerator:
             str(output_path)
         ]
         
-        subprocess.run(cmd, capture_output=True, shell=True)
+        result = subprocess.run(cmd, capture_output=True, shell=False)
+        
+        if result.returncode == 0:
+            print(f"Audio segments merged successfully")
+        else:
+            print(f"Warning: Audio merge may have issues")
         
         return str(output_path)
     
     def add_fade_effects(self, audio_path: str) -> str:
+        """Add fade in/out effects to audio"""
+        
+        # Check if input audio exists
+        if not os.path.exists(audio_path):
+            print(f"Warning: Audio file not found: {audio_path}")
+            return audio_path
+        
         output_path = self.output_dir / 'final_audio_faded.mp3'
+        
+        # Get audio duration first
+        duration_cmd = [
+            'ffprobe', '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            audio_path
+        ]
+        
+        try:
+            result = subprocess.run(duration_cmd, capture_output=True, text=True, timeout=10)
+            duration = float(result.stdout.strip())
+            fade_out_start = max(0, duration - 2)
+        except:
+            fade_out_start = 58  # Default fallback
         
         cmd = [
             'ffmpeg', '-y',
             '-i', audio_path,
-            '-af', 'afade=t=in:st=0:d=1,afade=t=out:st=-2:d=2',
+            '-af', f'afade=t=in:st=0:d=1,afade=t=out:st={fade_out_start}:d=2',
             str(output_path)
         ]
         
-        subprocess.run(cmd, capture_output=True, shell=True)
+        result = subprocess.run(cmd, capture_output=True, shell=False)
         
-        return str(output_path)
+        if result.returncode == 0 and os.path.exists(output_path):
+            print(f"Fade effects added successfully")
+            return str(output_path)
+        else:
+            print(f"Warning: Could not add fade effects, using original audio")
+            return audio_path
